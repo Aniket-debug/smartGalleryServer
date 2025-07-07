@@ -18,28 +18,24 @@ mongoose
 
 // Middlewares
 
-app.use(express.json());          // Parse JSON body
-app.use(cookieParser());          // Parse cookies
-
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(checkAuth);
 
-// ----- Home Route -----
+
+// ----- Routes -----
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome!", user: req.user });
 });
 
-// ----- Auth Routes -----
-
 app.use(authRouter);
-
-// ----- User Routes -----
 
 app.use("/user", userRouter);
 
-// ----- Image Routes -----
-
 app.use("/gallery", galleryRouter);
+
 
 app.listen(process.env.PORT || 3000, () => {
   console.log(`Server started on port ${process.env.PORT}`);

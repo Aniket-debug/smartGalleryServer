@@ -11,10 +11,6 @@ const gallerySchema = Schema({
         type: String,
         required: true
     },
-    publicId: {
-        type: String,
-        required: true
-    },
     embedding: {
         type: [Number],
         required: true

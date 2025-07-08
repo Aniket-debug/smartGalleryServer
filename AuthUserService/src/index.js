@@ -12,7 +12,7 @@ const app = express();
 // Connect to MongoDB
 
 mongoose
-  .connect(process.env.DB_URL)
+  .connect(process.env.DB_URL_ATLAS)
   .then(() => console.log("MongoDB connected!"))
   .catch((e) => console.error("MongoDB Error:", e));
 

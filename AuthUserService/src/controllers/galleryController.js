@@ -1,7 +1,7 @@
 const Gallery = require("../models/gallery");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinaryUtils");
+const { uploadToCloudinary, deleteFromCloudinary, extractPublicId } = require("../utils/cloudinaryUtils");
 const { getImageEmbedding, getCaptionEmbedding, cosineSim } = require("../utils/clipService");
-
+const mongoose = require("mongoose");
 
 const handleGetMyImages = async (req, res) => {
   try {
@@ -18,67 +18,102 @@ const handleGetMyImages = async (req, res) => {
 }
 
 const handleDeleteImage = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     if (!req.user) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(401).json({ msg: "Please log in first." });
     }
 
     const imageId = req.params.id;
 
-    const image = await Gallery.findById(imageId);
+    const image = await Gallery.findById(imageId).session(session);
     if (!image) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ msg: "Image not found." });
     }
 
     if (image.userId.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(403).json({ msg: "Not authorized to delete this image." });
     }
 
-    await deleteFromCloudinary(image.publicId);
+    const publicId = extractPublicId(image.url);
+    await deleteFromCloudinary(publicId);
 
-    await Gallery.findByIdAndDelete(imageId);
+    await Gallery.findByIdAndDelete(imageId, { session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.json({ msg: "Image deleted successfully!" });
 
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     console.error("Error deleting image:", error);
     return res.status(500).json({ msg: "Server error. Please try again later." });
   }
 };
 
 
-const handlePostUploadImage = async (req, res) => {
-  try {
 
-    if (!req.user._id) {
-      return res.status(400).json({ message: "Please login to upload a file!" })
+const handlePostUploadImage = async (req, res) => {
+  const session = await mongoose.startSession();
+  let public_id = null;
+  try {
+    session.startTransaction();
+
+    if (!req.user?._id) {
+      return res.status(400).json({ message: "Please login to upload a file!" });
     }
 
     if (!req.file) {
       return res.status(400).json({ message: "Please upload a file!" });
     }
 
-    const { url, public_id } = await uploadToCloudinary(req.file.buffer, "gallery");
+    const { url } = await uploadToCloudinary(req.file.buffer, "gallery");
+
+    public_id = extractPublicId(url);
 
     const embedding = await getImageEmbedding(url);
 
     const newImage = new Gallery({
       userId: req.user._id,
       url,
-      publicId: public_id,
       embedding,
     });
 
-    await newImage.save();
+    await newImage.save({ session });
 
-    res.status(200).json({
-      message: 'Image uploaded and embedded successfully',
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      message: "Image uploaded and embedded successfully",
       imageId: newImage._id,
     });
 
   } catch (err) {
-    console.error('Upload Error:', err);
-    res.status(500).json({ error: 'Failed to upload and process image' });
+    await session.abortTransaction();
+    session.endSession();
+
+    // Rollback Cloudinary upload if needed
+    if (public_id) {
+      try {
+        await deleteFromCloudinary(public_id);
+      } catch (cloudErr) {
+        console.warn("Cloudinary cleanup failed:", cloudErr);
+      }
+    }
+
+    console.error("Atomic Upload Error:", err);
+    return res.status(500).json({ error: "Failed to upload and process image" });
   }
 };
 

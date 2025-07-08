@@ -59,3 +59,6 @@ async def embed_caption(req: CaptionRequest):
         "size": embedding_size,
         "embedding": embedding_list
     }
+
+
+# uvicorn app:app --reload --port 8000

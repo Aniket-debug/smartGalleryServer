@@ -16,9 +16,6 @@ const userSchema = Schema({
     profileImageURL: {
         type: String,
     },
-    publicId: {
-        type: String,
-    },
     role: {
         type: String,
         enum: ["USER", "ADMIN"],

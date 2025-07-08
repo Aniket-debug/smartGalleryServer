@@ -20,14 +20,27 @@ const uploadToCloudinary = (buffer, folderName) => {
       (error, result) => {
         if (error) return reject(error);
         resolve({
-          url: result.secure_url,
-          public_id: result.public_id
+          url: result.secure_url
         });
       }
     );
     uploadStream.end(buffer);
   });
 };
+
+const extractPublicId = (imageUrl) => {
+  try {
+    const urlParts = imageUrl.split('/upload/')[1];
+    const parts = urlParts.split('/');
+    parts.shift();
+    const filename = parts.pop().split('.')[0];
+    return [...parts, filename].join('/');
+  } catch (error) {
+    console.error("Invalid Cloudinary URL format");
+    return null;
+  }
+}
+
 
 /**
  * Delete an image from Cloudinary using its public_id.
@@ -55,5 +68,6 @@ const deleteFromCloudinary = async (publicId) => {
 
 module.exports = {
   uploadToCloudinary,
-  deleteFromCloudinary
+  deleteFromCloudinary,
+  extractPublicId
 };

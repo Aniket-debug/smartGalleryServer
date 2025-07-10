@@ -36,7 +36,6 @@ app.use("/user", userRouter);
 
 app.use("/gallery", galleryRouter);
 
-
 app.listen(process.env.PORT || 3000, () => {
   console.log(`Server started on port ${process.env.PORT}`);
 });

@@ -1,6 +1,6 @@
 const Gallery = require("../models/gallery");
 const { uploadToCloudinary, deleteFromCloudinary, extractPublicId } = require("../utils/cloudinaryUtils");
-const { getImageEmbedding, getCaptionEmbedding, cosineSim } = require("../utils/clipService");
+const { getImageEmbedding, getCaptionEmbedding, dotSim } = require("../utils/clipService");
 const mongoose = require("mongoose");
 
 const handleGetMyImages = async (req, res) => {
@@ -10,7 +10,7 @@ const handleGetMyImages = async (req, res) => {
       const imagesUrl = await Gallery.find({ userId }).select("url");
       return res.json({ images: imagesUrl });
     }
-    return res.status(401).json({ msg: "Please log in first." });
+    return res.status(401).json({ msg: "Please logIn first." });
   } catch (error) {
     console.error("Error fetching user images:", error);
     return res.status(500).json({ msg: "Server error. Please try again later." });
@@ -25,7 +25,7 @@ const handleDeleteImage = async (req, res) => {
     if (!req.user) {
       await session.abortTransaction();
       session.endSession();
-      return res.status(401).json({ msg: "Please log in first." });
+      return res.status(401).json({ msg: "Please logIn first." });
     }
 
     const imageId = req.params.id;
@@ -66,6 +66,7 @@ const handleDeleteImage = async (req, res) => {
 const handlePostUploadImage = async (req, res) => {
   const session = await mongoose.startSession();
   let public_id = null;
+
   try {
     session.startTransaction();
 
@@ -77,15 +78,22 @@ const handlePostUploadImage = async (req, res) => {
       return res.status(400).json({ message: "Please upload a file!" });
     }
 
-    const { url } = await uploadToCloudinary(req.file.buffer, "gallery");
+    const imageBuffer = req.file.buffer;
 
-    public_id = extractPublicId(url);
+    const [cloudinaryRes, embedding] = await Promise.all([
+      uploadToCloudinary(imageBuffer, "gallery"),
+      getImageEmbedding(imageBuffer)
+    ]);
 
-    const embedding = await getImageEmbedding(url);
+    const { imageURL } = cloudinaryRes;
+
+    public_id = extractPublicId(imageURL);
+
+
 
     const newImage = new Gallery({
       userId: req.user._id,
-      url,
+      imageURL,
       embedding,
     });
 
@@ -103,7 +111,6 @@ const handlePostUploadImage = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    // Rollback Cloudinary upload if needed
     if (public_id) {
       try {
         await deleteFromCloudinary(public_id);
@@ -118,11 +125,12 @@ const handlePostUploadImage = async (req, res) => {
 };
 
 
+
 const handlePostSearchImage = async (req, res) => {
   try {
 
     if (!req.user._id) {
-      return res.status(400).json({ message: "Please login to upload a file!" })
+      return res.status(400).json({ message: "Please logIn to upload a file!" })
     }
 
     const userId = req.user._id;
@@ -137,11 +145,11 @@ const handlePostSearchImage = async (req, res) => {
     const images = await Gallery.find({ userId }).select("url embedding");
 
     if (!images.length) {
-      return res.status(404).json({ message: "No images found for this user." });
+      return res.status(404).json({ message: "No image is found !!" });
     }
 
     const results = images.map(img => {
-      const similarity = cosineSim(captionEmbedding, img.embedding);
+      const similarity = dotSim(captionEmbedding, img.embedding);
       return {
         _id: img._id,
         url: img.url,
@@ -151,7 +159,7 @@ const handlePostSearchImage = async (req, res) => {
 
     results.sort((a, b) => b.similarity - a.similarity);
 
-    res.status(200).json({ results: results.slice(0, 10) });
+    res.status(200).json({ results: results.slice(0, 3) });
 
   } catch (err) {
     console.error("Search Error:", err);

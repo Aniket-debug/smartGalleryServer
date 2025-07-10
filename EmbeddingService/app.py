@@ -8,15 +8,12 @@ import io
 
 app = FastAPI()
 
-# Load CLIP model at startup
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 
-# Input model for caption embedding
 class CaptionRequest(BaseModel):
     caption: str
 
-# Output model for response
 class EmbeddingResponse(BaseModel):
     embedding: List[float]
 
@@ -24,7 +21,6 @@ class EmbeddingResponse(BaseModel):
 def read_root():
     return {"msg":"This is Embedding Service"}
 
-# Endpoint: Get image embedding
 @app.post("/embed/image", response_model=EmbeddingResponse)
 async def embed_image(file: UploadFile = File(...)):
     image_bytes = await file.read()
@@ -43,7 +39,6 @@ async def embed_image(file: UploadFile = File(...)):
         "embedding": embedding_list
     }
 
-# Endpoint: Get caption embedding
 @app.post("/embed/caption", response_model=EmbeddingResponse)
 async def embed_caption(req: CaptionRequest):
     text = clip.tokenize([req.caption]).to(device)

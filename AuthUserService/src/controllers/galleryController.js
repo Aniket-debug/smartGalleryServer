@@ -61,11 +61,9 @@ const handleDeleteImage = async (req, res) => {
   }
 };
 
-
-
 const handlePostUploadImage = async (req, res) => {
   const session = await mongoose.startSession();
-  let public_id = null;
+  let publicId = null;
 
   try {
     session.startTransaction();
@@ -81,19 +79,17 @@ const handlePostUploadImage = async (req, res) => {
     const imageBuffer = req.file.buffer;
 
     const [cloudinaryRes, embedding] = await Promise.all([
-      uploadToCloudinary(imageBuffer, "gallery"),
+      uploadToCloudinary(imageBuffer, "gallery", req.user.email.replace(/[@.]/g, "_")),
       getImageEmbedding(imageBuffer)
     ]);
 
-    const { imageURL } = cloudinaryRes;
+    const { url, public_id } = cloudinaryRes;
 
-    public_id = extractPublicId(imageURL);
-
-
+    publicId = public_id;
 
     const newImage = new Gallery({
       userId: req.user._id,
-      imageURL,
+      url,
       embedding,
     });
 
@@ -111,9 +107,9 @@ const handlePostUploadImage = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    if (public_id) {
+    if (publicId) {
       try {
-        await deleteFromCloudinary(public_id);
+        await deleteFromCloudinary(publicId);
       } catch (cloudErr) {
         console.warn("Cloudinary cleanup failed:", cloudErr);
       }

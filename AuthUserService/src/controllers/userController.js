@@ -1,7 +1,7 @@
 const User = require("../models/user");
 const Gallery = require("../models/gallery");
 const { match_password} = require("../utils/userUtility");
-const { uploadToCloudinary, deleteFromCloudinary, extractPublicId} = require("../utils/cloudinaryUtils");
+const { uploadToCloudinary, deleteFromCloudinary, extractPublicId, deleteFolderFromCloudinary} = require("../utils/cloudinaryUtils");
 
 const mongoose = require("mongoose");
 const handleGetUser = async (req, res) => {
@@ -44,12 +44,10 @@ const handlePatchUser = async (req, res) => {
     }
 
     if (req.file) {
-      // Upload new image first
-      const { url } = await uploadToCloudinary(req.file.buffer, "profile");
+      const { url, public_id } = await uploadToCloudinary(req.file.buffer, "profile", req.user.email.replace(/[@.]/g, "_"));
       newProfileImageURL = url;
-      newProfilePublicId = extractPublicId(url);
+      newProfilePublicId = public_id;
 
-      // Mark old one for deletion (only if save succeeds later)
       if (user.profileImageURL) {
         oldProfilePublicIdToDelete = extractPublicId(user.profileImageURL);
       }
@@ -83,7 +81,6 @@ const handlePatchUser = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // ✅ After successful save, delete old Cloudinary image
     if (oldProfilePublicIdToDelete) {
       try {
         await deleteFromCloudinary(oldProfilePublicIdToDelete);
@@ -106,7 +103,6 @@ const handlePatchUser = async (req, res) => {
     await session.abortTransaction();
     session.endSession();
 
-    // Cleanup newly uploaded Cloudinary image
     if (newProfilePublicId) {
       try {
         await deleteFromCloudinary(newProfilePublicId);
@@ -138,28 +134,22 @@ const handleDeleteUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Collect profile image public ID
     if (user.profileImageURL) {
       publicIdsToDelete.push(extractPublicId(user.profileImageURL));
     }
 
-    // Collect all user's gallery image public IDs
     const userImages = await Gallery.find({ userId }).select("url").session(session);
     for (const img of userImages) {
       publicIdsToDelete.push(extractPublicId(img.url));
     }
 
-    // Delete gallery records
     await Gallery.deleteMany({ userId }, { session });
 
-    // Delete user
     await User.findByIdAndDelete(userId, { session });
 
-    // Commit transaction (DB deletion is final here)
     await session.commitTransaction();
     session.endSession();
 
-    // Cloudinary cleanup after successful DB operations
     for (const publicId of publicIdsToDelete) {
       try {
         await deleteFromCloudinary(publicId);
@@ -167,6 +157,11 @@ const handleDeleteUser = async (req, res) => {
         console.warn(`⚠️ Failed to delete image: ${publicId}`, cloudErr);
       }
     }
+
+    const userFolderSafeId = req.user.email.replace(/[@.]/g, "_");
+
+    await deleteFolderFromCloudinary(`smartGallery/profileImages/${userFolderSafeId}`);
+    await deleteFolderFromCloudinary(`smartGallery/galleryImages/${userFolderSafeId}`);
 
     res.clearCookie("token");
 

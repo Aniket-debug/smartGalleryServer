@@ -1,6 +1,6 @@
 const User = require("../models/user");
 const { createToken } = require("../utils/jwtUtils");
-const { uploadToCloudinary, extractPublicId } = require("../utils/cloudinaryUtils");
+const { uploadToCloudinary } = require("../utils/cloudinaryUtils");
 const mongoose = require("mongoose");
 
 const handlePostSignUp = async (req, res) => {
@@ -28,9 +28,9 @@ const handlePostSignUp = async (req, res) => {
     let profileImageURL = undefined;
 
     if (req.file) {
-      const { url } = await uploadToCloudinary(req.file.buffer, "profile");
+      const { url, public_id } = await uploadToCloudinary(req.file.buffer, "profile", email.replace(/[@.]/g, "_"));
       profileImageURL = url;
-      publicId = extractPublicId(profileImageURL);
+      publicId = public_id;
     }
 
     const user = new User({
@@ -83,36 +83,36 @@ const handlePostSignUp = async (req, res) => {
 
 const handlePostLogIn = async (req, res) => {
 
-    if (req.user) return res.status(401).json({ msg: "you are already loggedIn!" });
+  if (req.user) return res.status(401).json({ msg: "you are already loggedIn!" });
 
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    try {
-        const { token, user } = await User.matchUserAndReturnToken(email, password);
+  try {
+    const { token, user } = await User.matchUserAndReturnToken(email, password);
 
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "Strict",
-        });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    });
 
-        console.log("user loggedIn: ", user);
+    console.log("user loggedIn: ", user);
 
-        res.status(200).json({ message: "Login successful", user });
-    } catch (err) {
-        res.status(401).json({ message: err.message });
-    }
+    res.status(200).json({ message: "Login successful", user });
+  } catch (err) {
+    res.status(401).json({ message: err.message });
+  }
 }
 
 const handlePostLogOut = (req, res) => {
-    if (req.user) {
-        return res.clearCookie("token").json({ msg: "logged out successfully!" });
-    }
-    return res.json({ msg: "please login first!" });
+  if (req.user) {
+    return res.clearCookie("token").json({ msg: "logged out successfully!" });
+  }
+  return res.json({ msg: "please login first!" });
 }
 
 module.exports = {
-    handlePostSignUp,
-    handlePostLogIn,
-    handlePostLogOut
+  handlePostSignUp,
+  handlePostLogIn,
+  handlePostLogOut
 }

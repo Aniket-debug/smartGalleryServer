@@ -30,7 +30,7 @@ app.get("/", (req, res) => {
   res.json({ message: "Welcome!", user: req.user });
 });
 
-app.use(authRouter);
+app.use("/auth", authRouter);
 
 app.use("/user", userRouter);
 

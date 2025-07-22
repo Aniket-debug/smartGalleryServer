@@ -2,15 +2,15 @@ const { Router } = require("express");
 const upload = require("../config/upload");
 const { handleGetMyImages,
     handleDeleteImage,
-    handlePostUploadImage,
+    handlePostUploadImages,
     handlePostSearchImage
-} = require("../controllers/galleryController");
+} = require("../controllers/galleryControllerMongo");
 
 const router = Router();
 
 router.get("/my-images", handleGetMyImages);
 router.delete("/:id", handleDeleteImage);
-router.post("/upload", upload.single("image"), handlePostUploadImage);
+router.post("/upload", upload.array("images", 50), handlePostUploadImages);
 router.post("/search", handlePostSearchImage);
 
 module.exports = router;

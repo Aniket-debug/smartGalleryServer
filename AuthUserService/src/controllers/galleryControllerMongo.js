@@ -8,7 +8,7 @@ const handleGetMyImages = async (req, res) => {
     if (req.user) {
       const userId = req.user._id;
       const imagesUrl = await Gallery.find({ userId }).select("url");
-      return res.json({ images: imagesUrl });
+      return res.json({ numberOfImages: imagesUrl.length, images: imagesUrl });
     }
     return res.status(401).json({ msg: "Please logIn first." });
   } catch (error) {
@@ -61,53 +61,61 @@ const handleDeleteImage = async (req, res) => {
   }
 };
 
-const handlePostUploadImage = async (req, res) => {
+const handlePostUploadImages = async (req, res) => {
   const session = await mongoose.startSession();
-  let publicId = null;
+  const cloudinaryPublicIds = [];
 
   try {
     session.startTransaction();
 
     if (!req.user?._id) {
-      return res.status(400).json({ message: "Please login to upload a file!" });
+      return res.status(400).json({ message: "Please login to upload files!" });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Please upload a file!" });
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: "Please upload at least one file!" });
     }
 
-    const imageBuffer = req.file.buffer;
+    if (files.length > 50) {
+      return res.status(400).json({ message: "You can upload a maximum of 50 images at once." });
+    }
 
-    const [cloudinaryRes, embedding] = await Promise.all([
-      uploadToCloudinary(imageBuffer, "gallery", req.user.email.replace(/[@.]/g, "_")),
-      getImageEmbedding(imageBuffer)
-    ]);
+    const imageDocs = [];
 
-    const { url, public_id } = cloudinaryRes;
+    for (const file of files) {
+      const imageBuffer = file.buffer;
 
-    publicId = public_id;
+      const [cloudinaryRes, embedding] = await Promise.all([
+        uploadToCloudinary(imageBuffer, "gallery", req.user.email.replace(/[@.]/g, "_")),
+        getImageEmbedding(imageBuffer)
+      ]);
 
-    const newImage = new Gallery({
-      userId: req.user._id,
-      url,
-      embedding,
-    });
+      const { url, public_id } = cloudinaryRes;
+      cloudinaryPublicIds.push(public_id);
 
-    await newImage.save({ session });
+      imageDocs.push({
+        userId: req.user._id,
+        url,
+        embedding,
+      });
+    }
+
+    await Gallery.insertMany(imageDocs, { session });
 
     await session.commitTransaction();
     session.endSession();
 
     return res.status(200).json({
-      message: "Image uploaded and embedded successfully",
-      imageId: newImage._id,
+      message: "Images uploaded and embedded successfully",
+      uploadedCount: imageDocs.length,
     });
 
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
 
-    if (publicId) {
+    for (const publicId of cloudinaryPublicIds) {
       try {
         await deleteFromCloudinary(publicId);
       } catch (cloudErr) {
@@ -115,12 +123,10 @@ const handlePostUploadImage = async (req, res) => {
       }
     }
 
-    console.error("Atomic Upload Error:", err);
-    return res.status(500).json({ error: "Failed to upload and process image" });
+    console.error("Batch Upload Error:", err);
+    return res.status(500).json({ error: "Failed to upload and process images" });
   }
 };
-
-
 
 const handlePostSearchImage = async (req, res) => {
   try {
@@ -166,6 +172,6 @@ const handlePostSearchImage = async (req, res) => {
 module.exports = {
   handleGetMyImages,
   handleDeleteImage,
-  handlePostUploadImage,
+  handlePostUploadImages,
   handlePostSearchImage
 };

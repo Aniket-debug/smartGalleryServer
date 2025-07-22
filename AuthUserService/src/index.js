@@ -1,20 +1,15 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
 const cookieParser = require("cookie-parser");
 const checkAuth = require("./middlewares/checkAuth");
 const authRouter = require("./routes/authRoutes");
 const userRouter = require("./routes/userRoutes");
 const galleryRouter = require("./routes/galleryRoutes");
+const connectMongo = require("./config/mongo");
+
+connectMongo();
 
 const app = express();
-
-// Connect to MongoDB
-
-mongoose
-  .connect(process.env.DB_URL_ATLAS)
-  .then(() => console.log("MongoDB connected!"))
-  .catch((e) => console.error("MongoDB Error:", e));
 
 // Middlewares
 

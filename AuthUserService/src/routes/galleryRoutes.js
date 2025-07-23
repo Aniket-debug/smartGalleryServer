@@ -4,7 +4,7 @@ const { handleGetMyImages,
     handleDeleteImage,
     handlePostUploadImages,
     handlePostSearchImage
-} = require("../controllers/galleryControllerMongo");
+} = require("../controllers/galleryControllerMilvus");
 
 const router = Router();
 

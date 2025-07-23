@@ -144,9 +144,14 @@ const handlePostSearchImage = async (req, res) => {
 
     const results = await milvusClient.search({
       collection_name: "gallery_images",
-      vector: [captionEmbedding],
+      vector: captionEmbedding,
       output_fields: ["url", "user_id", "metadata_id"],
-      search_params: { anns_field: "embedding", topk: 3, metric_type: "IP" },
+      search_params: {
+        anns_field: "embedding",
+        topk: "3",
+        metric_type: "IP",
+        params: JSON.stringify({ nprobe: 10 })
+      },
       filter: `user_id == "${req.user._id.toString()}"`
     });
 

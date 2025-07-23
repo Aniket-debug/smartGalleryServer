@@ -17,50 +17,6 @@ const handleGetMyImages = async (req, res) => {
   }
 }
 
-const handleDeleteImage = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    if (!req.user) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(401).json({ msg: "Please logIn first." });
-    }
-
-    const imageId = req.params.id;
-
-    const image = await Gallery.findById(imageId).session(session);
-    if (!image) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ msg: "Image not found." });
-    }
-
-    if (image.userId.toString() !== req.user._id.toString()) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(403).json({ msg: "Not authorized to delete this image." });
-    }
-
-    const publicId = extractPublicId(image.url);
-    await deleteFromCloudinary(publicId);
-
-    await Gallery.findByIdAndDelete(imageId, { session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return res.json({ msg: "Image deleted successfully!" });
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    console.error("Error deleting image:", error);
-    return res.status(500).json({ msg: "Server error. Please try again later." });
-  }
-};
-
 const handlePostUploadImages = async (req, res) => {
   const session = await mongoose.startSession();
   const cloudinaryPublicIds = [];
@@ -125,6 +81,50 @@ const handlePostUploadImages = async (req, res) => {
 
     console.error("Batch Upload Error:", err);
     return res.status(500).json({ error: "Failed to upload and process images" });
+  }
+};
+
+const handleDeleteImage = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    if (!req.user) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(401).json({ msg: "Please logIn first." });
+    }
+
+    const imageId = req.params.id;
+
+    const image = await Gallery.findById(imageId).session(session);
+    if (!image) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ msg: "Image not found." });
+    }
+
+    if (image.userId.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ msg: "Not authorized to delete this image." });
+    }
+
+    const publicId = extractPublicId(image.url);
+    await deleteFromCloudinary(publicId);
+
+    await Gallery.findByIdAndDelete(imageId, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({ msg: "Image deleted successfully!" });
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Error deleting image:", error);
+    return res.status(500).json({ msg: "Server error. Please try again later." });
   }
 };
 

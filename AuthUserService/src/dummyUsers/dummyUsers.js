@@ -2,22 +2,23 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
-const { takeCoverage } = require('v8');
 
 // CONFIGURATION
-const BASE_URL = 'http://localhost:8001';
-const TOTAL_USERS = 5;
-const IMAGES_PER_USER = 200;
+const BASE_URL = 'http://localhost:8001'; // Update this if your server runs elsewhere
+const TOTAL_USERS = 10;
+const IMAGES_PER_USER = 1000;
 
-const COCO_DIR = './coco_500/data';
-const FLICKR_DIR = './flickr_500';
+const COCO_DIR = './coco-2017/data';  // COCO images
+const FLICKR_DIR = './flickr_5000';   // Flickr images
 
+// Create dummy users
 const USERS = Array.from({ length: TOTAL_USERS }, (_, i) => ({
-  fullname: `dummyuser${i + 1}`,
-  email: `dummy${i + 1}@example.com`,
+  fullname: `sampleuser${i + 1}`,
+  email: `sample${i + 1}@example.com`,
   password: 'password123',
 }));
 
+// Register and login a user, return JWT token
 async function registerAndLoginUser(user) {
   try {
     await axios.post(`${BASE_URL}/auth/signup`, user);
@@ -52,6 +53,7 @@ async function registerAndLoginUser(user) {
   }
 }
 
+// Get shuffled list of images (Flickr + COCO)
 function getShuffledImages(limit) {
   const cocoImages = fs.readdirSync(COCO_DIR).map(f => path.join(COCO_DIR, f));
   const flickrImages = fs.readdirSync(FLICKR_DIR).map(f => path.join(FLICKR_DIR, f));
@@ -64,10 +66,10 @@ function getShuffledImages(limit) {
     .slice(0, limit);
 }
 
-
-async function uploadImage(token, imagePath) {
+// Upload a single image for a user
+async function uploadImage(token, imagePath, user) {
   const form = new FormData();
-  form.append('image', fs.createReadStream(imagePath));
+  form.append('images', fs.createReadStream(imagePath));
 
   try {
     await axios.post(`${BASE_URL}/gallery/upload`, form, {
@@ -82,26 +84,32 @@ async function uploadImage(token, imagePath) {
   }
 }
 
+// Main script
 (async () => {
   const totalImagesNeeded = USERS.length * IMAGES_PER_USER;
   const allShuffledImages = getShuffledImages(totalImagesNeeded);
 
   for (let i = 0; i < USERS.length; i++) {
-    const user = USERS[4];
+    const user = USERS[i];
     console.log(`\n👤 Creating user: ${user.fullname}`);
     const token = await registerAndLoginUser(user);
 
-    console.log(token);
+    if (!token) {
+      console.warn(`⚠️ Skipping uploads for ${user.email} due to missing token`);
+      continue;
+    }
 
-    if (!token) continue;
-
-    const start = i * IMAGES_PER_USER + 47;
+    const start = i * IMAGES_PER_USER;
     const end = (i + 1) * IMAGES_PER_USER;
     const userImages = allShuffledImages.slice(start, end);
 
+    console.log(`📦 Uploading ${userImages.length} images for ${user.email}...`);
     for (const imagePath of userImages) {
-      await uploadImage(token, imagePath);
+      await uploadImage(token, imagePath, user);
+      await new Promise(r => setTimeout(r, 50));
     }
+
+    console.log(`✅ Completed uploads for ${user.email}`);
   }
 
   console.log('\n🎉 All users created and images uploaded.');
